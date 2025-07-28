@@ -1,9 +1,8 @@
 import Header from "./components/ManualHeader"
-import { MoralisProvider } from "react-moralis"
+// import { MoralisProvider } from "react-moralis"
 function App() {
   return (
     <>
-    <MoralisProvider initializeOnMount={false}>
       <head>
         <title>Smart Contract Lottery</title>
       </head>
@@ -14,7 +13,6 @@ function App() {
           <Header></Header>
         </div>
       </body>
-      </MoralisProvider>
     </>
   )
 }

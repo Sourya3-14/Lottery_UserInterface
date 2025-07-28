@@ -10,10 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coinbase/wallet-sdk": "^4.3.7",
+    "@walletconnect/web3-provider": "^1.8.0",
+    "@web3modal/core": "^5.1.11",
+    "@web3modal/ethereum": "^2.7.1",
+    "@web3modal/react": "^2.7.1",
+    "ethers": "^6.15.0",
     "moralis": "^2.27.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-moralis": "^1.4.2"
+    "viem": "^2.33.1",
+    "wagmi": "^2.16.0",
+    "web3modal": "^1.9.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
