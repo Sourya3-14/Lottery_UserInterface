@@ -44,30 +44,6 @@
     margin: 0 0 16px 0;
 }
 
-/* .terms-container {
-    display: flex;
-    align-items: center;
-    margin-bottom: 24px;
-}
-
-.terms-checkbox {
-    margin-right: 8px;
-}
-
-.terms-label {
-    font-size: 14px;
-    color: #666;
-}
-
-.terms-link {
-    color: #0066cc;
-    text-decoration: none;
-}
-
-.terms-link:hover {
-    text-decoration: underline;
-} */
-
 .wallet-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
