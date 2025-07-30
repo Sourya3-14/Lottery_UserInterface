@@ -30,8 +30,7 @@ body {
 
 .header-left {
     display: flex;
-    align-items: center;
-    gap: 1rem;
+    flex-direction: column;
 }
 
 .app-title {
@@ -58,6 +57,72 @@ body {
 /* Wallet Connection Styles */
 .wallet-connection {
     position: relative;
+}
+
+.error-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1001;
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.error-toast-content {
+    background: #2d1b1b;
+    border: 1px solid #5d2d2d;
+    border-left: 4px solid #ef4444;
+    color: #ff6b6b;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.error-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.error-text {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    flex: 1;
+}
+
+.error-close {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+    flex-shrink: 0;
+}
+
+.error-close:hover {
+    background: rgba(239, 68, 68, 0.2);
 }
 
 .connect-button {
@@ -206,6 +271,23 @@ body {
     word-break: break-all;
 }
 
+.copy-button {
+    background: #374151;
+    border: 1px solid #4b5563;
+    color: #d1d5db;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-top: 0.5rem;
+}
+
+.copy-button:hover {
+    background: #4b5563;
+    color: white;
+}
+
 .popup-network {
     color: white;
     font-size: 0.875rem;
@@ -239,7 +321,7 @@ body {
     background-color: #b91c1c;
 }
 
-/* Wallet Modal Styles - Updated */
+/* Wallet Modal Styles */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -340,4 +422,262 @@ body {
     color: #64748b;
     margin-top: 0.25rem;
     display: block;
+}
+.lottery-entrance {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.lottery-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 30px;
+    color: white;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.lottery-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.lottery-header h2 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.status-badge {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.status-badge.open {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 2px solid #22c55e;
+}
+
+.status-badge.closed {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 2px solid #ef4444;
+}
+
+.lottery-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.recent-winner {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.winner-label {
+    font-size: 14px;
+    margin-bottom: 8px;
+    opacity: 0.9;
+}
+
+.winner-address {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.entry-form {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 25px;
+    border-radius: 15px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.entry-input-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+.quantity-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quantity-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.quantity-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.entry-input {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 12px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    width: 80px;
+}
+
+.entry-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.cost-summary {
+    margin-bottom: 20px;
+}
+
+.cost-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.cost-value {
+    font-weight: bold;
+}
+
+.error-message {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid #ef4444;
+    color: #fca5a5;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.transaction-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.transaction-status.pending,
+.transaction-status.confirming {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid #3b82f6;
+    color: #93c5fd;
+}
+
+.transaction-status.success {
+    background: rgba(34, 197, 94, 0.2);
+    border: 1px solid #22c55e;
+    color: #86efac;
+}
+
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.enter-button {
+    width: 100%;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    border: none;
+    color: white;
+    padding: 16px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.enter-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.enter-button:disabled {
+    background: rgba(255, 255, 255, 0.2);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.transaction-hash {
+    margin-top: 15px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.hash-link {
+    color: #93c5fd;
+    text-decoration: none;
+}
+
+.hash-link:hover {
+    text-decoration: underline;
 }
