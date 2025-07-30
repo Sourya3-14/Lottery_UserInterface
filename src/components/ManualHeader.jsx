@@ -6,16 +6,17 @@ function Header() {
   const [showWalletOptions, setShowWalletOptions] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [currentNetwork, setCurrentNetwork] = useState(null);
+  const [showWalletPopup, setShowWalletPopup] = useState(false);
 
   // Network configuration
   const networks = {
     '0x1': 'Ethereum Mainnet',
     '0x89': 'Polygon',
-    '0x38': 'BSC',
-    '0xa': 'Optimism',
-    '0xa4b1': 'Arbitrum',
+    // '0x38': 'BSC',
+    // '0xa': 'Optimism',
+    // '0xa4b1': 'Arbitrum',
     '0xaa36a7': 'Sepolia Testnet',
-    '0x5': 'Goerli Testnet'
+    // '0x5': 'Goerli Testnet'
   };
 
   const getNetworkInfo = async (provider) => {
@@ -55,9 +56,126 @@ function Header() {
     }
   ];
 
+  // Save connection to localStorage
+  const saveConnection = (walletData, networkData) => {
+    try {
+      const connectionData = {
+        wallet: walletData,
+        network: networkData,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('walletConnection', JSON.stringify(connectionData));
+    } catch (error) {
+      console.error('Failed to save connection:', error);
+    }
+  };
+
+  // Load connection from localStorage
+  const loadConnection = () => {
+    try {
+      const saved = localStorage.getItem('walletConnection');
+      if (saved) {
+        const connectionData = JSON.parse(saved);
+        // Check if connection is not older than 24 hours
+        const isRecent = Date.now() - connectionData.timestamp < 24 * 60 * 60 * 1000;
+        if (isRecent) {
+          return connectionData;
+        } else {
+          // Remove old connection
+          localStorage.removeItem('walletConnection');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load connection:', error);
+      localStorage.removeItem('walletConnection');
+    }
+    return null;
+  };
+
+  // Clear saved connection
+  const clearConnection = () => {
+    try {
+      localStorage.removeItem('walletConnection');
+    } catch (error) {
+      console.error('Failed to clear connection:', error);
+    }
+  };
+
+  // Auto-reconnect on page load
+  const autoReconnect = async (savedConnection) => {
+    if (!savedConnection) return;
+
+    const { wallet, network } = savedConnection;
+    setIsConnecting(true);
+
+    try {
+      let currentAccount = null;
+      
+      switch (wallet.id) {
+        case 'metamask':
+          if (window.ethereum && window.ethereum.isMetaMask) {
+            const accounts = await window.ethereum.request({
+              method: 'eth_accounts'
+            });
+            if (accounts.length > 0 && accounts.includes(wallet.account)) {
+              currentAccount = wallet.account;
+              const networkInfo = await getNetworkInfo(window.ethereum);
+              setCurrentNetwork(networkInfo);
+            }
+          }
+          break;
+          
+        case 'coinbase':
+          if (window.ethereum && window.ethereum.isCoinbaseWallet) {
+            const accounts = await window.ethereum.request({
+              method: 'eth_accounts'
+            });
+            if (accounts.length > 0 && accounts.includes(wallet.account)) {
+              currentAccount = wallet.account;
+              const networkInfo = await getNetworkInfo(window.ethereum);
+              setCurrentNetwork(networkInfo);
+            }
+          }
+          break;
+          
+        case 'phantom':
+          if (window.solana && window.solana.isPhantom) {
+            if (window.solana.isConnected && window.solana.publicKey) {
+              const currentKey = window.solana.publicKey.toString();
+              if (currentKey === wallet.account) {
+                currentAccount = wallet.account;
+                setCurrentNetwork({ chainId: 'solana', name: 'Solana Mainnet' });
+              }
+            }
+          }
+          break;
+      }
+
+      if (currentAccount) {
+        setIsConnected(true);
+        setConnectedWallet(wallet);
+      } else {
+        clearConnection();
+      }
+    } catch (error) {
+      console.error('Auto-reconnect failed:', error);
+      clearConnection();
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Load and auto-reconnect on component mount
+  useEffect(() => {
+    const savedConnection = loadConnection();
+    if (savedConnection) {
+      autoReconnect(savedConnection);
+    }
+  }, []);
+
   const connectWallet = async (walletId) => {
     setIsConnecting(true);
-    setShowWalletOptions(false); // Close wallet selection modal first
+    setShowWalletOptions(false);
 
     try {
       let account = null;
@@ -66,24 +184,20 @@ function Header() {
         case 'metamask':
           if (window.ethereum && window.ethereum.isMetaMask) {
             try {
-              // First, disconnect any existing connections to force account selection
               await window.ethereum.request({
                 method: 'wallet_revokePermissions',
                 params: [{ eth_accounts: {} }]
               });
             } catch (error) {
-              // Ignore if revokePermissions fails (older MetaMask versions)
               console.log('Could not revoke permissions:', error);
             }
             
-            // This will now force MetaMask's account selection popup
             const accounts = await window.ethereum.request({
               method: 'eth_requestAccounts'
             });
             
             if (accounts.length > 0) {
-              // Use the account(s) selected by user in MetaMask popup
-              account = accounts[0]; // MetaMask returns the selected account first
+              account = accounts[0];
               const networkInfo = await getNetworkInfo(window.ethereum);
               setCurrentNetwork(networkInfo);
             }
@@ -98,7 +212,6 @@ function Header() {
           
         case 'coinbase':
           if (window.ethereum && window.ethereum.isCoinbaseWallet) {
-            // This will trigger Coinbase Wallet's confirmation popup
             const accounts = await window.ethereum.request({
               method: 'eth_requestAccounts'
             });
@@ -114,7 +227,6 @@ function Header() {
           
         case 'phantom':
           if (window.solana && window.solana.isPhantom) {
-            // This will trigger Phantom's confirmation popup
             const response = await window.solana.connect();
             if (response.publicKey) {
               account = response.publicKey.toString();
@@ -130,16 +242,18 @@ function Header() {
       }
 
       if (account) {
-        setIsConnected(true);
-        setConnectedWallet({
+        const walletData = {
           id: walletId,
           name: walletProviders.find(w => w.id === walletId)?.name,
           account: account
-        });
+        };
+        
+        setIsConnected(true);
+        setConnectedWallet(walletData);
+        saveConnection(walletData, currentNetwork);
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
-      // Show user-friendly error messages
       if (error.code === 4001) {
         alert('Connection request was rejected by user.');
       } else if (error.code === -32002) {
@@ -156,9 +270,11 @@ function Header() {
     setIsConnected(false);
     setConnectedWallet(null);
     setCurrentNetwork(null);
+    setShowWalletPopup(false);
+    clearConnection();
   };
 
-  // Listen for network changes
+  // Listen for network and account changes
   useEffect(() => {
     if (isConnected && connectedWallet) {
       const handleNetworkChange = async (chainId) => {
@@ -167,11 +283,16 @@ function Header() {
           name: networks[chainId] || `Unknown Network (${chainId})`
         };
         setCurrentNetwork(networkInfo);
+        saveConnection(connectedWallet, networkInfo);
       };
 
       const handleAccountsChanged = (accounts) => {
         if (accounts.length === 0) {
           disconnectWallet();
+        } else if (accounts[0] !== connectedWallet.account) {
+          const updatedWallet = { ...connectedWallet, account: accounts[0] };
+          setConnectedWallet(updatedWallet);
+          saveConnection(updatedWallet, currentNetwork);
         }
       };
 
@@ -187,75 +308,146 @@ function Header() {
         };
       }
     }
-  }, [isConnected, connectedWallet]);
-
-  const refreshNetworkInfo = async () => {
-    if (isConnected && connectedWallet) {
-      try {
-        if (connectedWallet.id === 'metamask' || connectedWallet.id === 'coinbase') {
-          const networkInfo = await getNetworkInfo(window.ethereum);
-          setCurrentNetwork(networkInfo);
-        }
-      } catch (error) {
-        console.error('Failed to refresh network info:', error);
-      }
-    }
-  };
+  }, [isConnected, connectedWallet, currentNetwork]);
 
   return (
     <div>
-      {!isConnected ? (
-        <div>
-          <button onClick={() => setShowWalletOptions(!showWalletOptions)}>
-            {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-          </button>
-
-          {/* Wallet Selection Modal */}
-          {showWalletOptions && !isConnecting && (
-            <div className="modal-overlay" onClick={() => setShowWalletOptions(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => setShowWalletOptions(false)} className="modal-close">
-                  ×
-                </button>
-
-                <h2 className="modal-title">Connect your wallet</h2>
-
-                <div className="wallet-grid">
-                  {walletProviders.map((wallet) => (
-                    <button
-                      key={wallet.id}
-                      onClick={() => connectWallet(wallet.id)}
-                      disabled={!wallet.available}
-                      className={`wallet-option ${!wallet.available ? 'wallet-option-disabled' : ''}`}
-                    >
-                      <div className="wallet-icon">
-                        {wallet.id === 'metamask' && '🦊'}
-                        {wallet.id === 'coinbase' && '🔵'}
-                        {wallet.id === 'walletconnect' && '🔗'}
-                        {wallet.id === 'phantom' && '👻'}
-                      </div>
-                      <span className="wallet-name">{wallet.name}</span>
-                      {!wallet.available && (
-                        <span className="wallet-status">Not installed</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      {/* Header */}
+      <header className="app-header">
+        <div className="header-container">
+          {/* Left side - App branding */}
+          <div className="header-left">
+            <div className="app-title">
+              DeFi Connect
             </div>
-          )}
+            <span className="app-subtitle">
+              Secure wallet connections
+            </span>
+          </div>
+
+          {/* Right side - Wallet connection */}
+          <div className="wallet-connection">
+            {!isConnected ? (
+              <div>
+                {isConnecting ? (
+                  <div className="connecting-status">
+                    <div className="loading-spinner"></div>
+                    <span className="connecting-text">Connecting...</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowWalletOptions(!showWalletOptions)}
+                    className="connect-button"
+                  >
+                    Connect Wallet
+                  </button>
+                )}
+
+                {/* Wallet Selection Modal */}
+                {showWalletOptions && !isConnecting && (
+                  <div className="modal-overlay">
+                    <div className="modal-content">
+                      <button
+                        onClick={() => setShowWalletOptions(false)}
+                        className="modal-close"
+                      >
+                        ×
+                      </button>
+
+                      <h2 className="modal-title">Connect your wallet</h2>
+
+                      <div className="wallet-grid">
+                        {walletProviders.map((wallet) => (
+                          <button
+                            key={wallet.id}
+                            onClick={() => connectWallet(wallet.id)}
+                            disabled={!wallet.available}
+                            className={`wallet-option ${!wallet.available ? 'wallet-option-disabled' : ''}`}
+                          >
+                            <div className="wallet-icon">
+                              {wallet.id === 'metamask' && '🦊'}
+                              {wallet.id === 'coinbase' && '🔵'}
+                              {wallet.id === 'walletconnect' && '🔗'}
+                              {wallet.id === 'phantom' && '👻'}
+                            </div>
+                            <div className="wallet-info">
+                              <span className="wallet-name">{wallet.name}</span>
+                              {!wallet.available && (
+                                <span className="wallet-status">Not installed</span>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <div
+                  className="connected-wallet"
+                  onMouseEnter={() => setShowWalletPopup(true)}
+                  onMouseLeave={() => setShowWalletPopup(false)}
+                >
+                  <div className="connection-indicator"></div>
+                  <span className="wallet-address">
+                    {connectedWallet?.account?.slice(0, 6)}...{connectedWallet?.account?.slice(-4)}
+                  </span>
+                </div>
+
+                {/* Wallet Info Popup */}
+                {showWalletPopup && (
+                  <div
+                    className="wallet-popup"
+                    onMouseEnter={() => setShowWalletPopup(true)}
+                    onMouseLeave={() => setShowWalletPopup(false)}
+                  >
+                    <div className="popup-header">
+                      <div className="popup-wallet-icon">
+                        {connectedWallet?.id === 'metamask' && '🦊'}
+                        {connectedWallet?.id === 'coinbase' && '🔵'}
+                        {connectedWallet?.id === 'walletconnect' && '🔗'}
+                        {connectedWallet?.id === 'phantom' && '👻'}
+                      </div>
+                      <span className="popup-wallet-name">{connectedWallet?.name}</span>
+                    </div>
+                    
+                    <div className="popup-section">
+                      <div className="popup-label">
+                        Wallet Address
+                      </div>
+                      <div className="popup-address">
+                        {connectedWallet?.account}
+                      </div>
+                    </div>
+
+                    {currentNetwork && (
+                      <div className="popup-section">
+                        <div className="popup-label">
+                          Network
+                        </div>
+                        <div className="popup-network">
+                          <div className="network-indicator"></div>
+                          <span>{currentNetwork.name}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={disconnectWallet}
+                      className="disconnect-button"
+                    >
+                      Disconnect Wallet
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      ) : (
-        <div>
-          <span>Connected: {connectedWallet?.name}</span>
-          <span> | Account: {connectedWallet?.account?.slice(0, 6)}...{connectedWallet?.account?.slice(-4)}</span>
-          {currentNetwork && (
-            <span> | Network: {currentNetwork.name}</span>
-          )}
-          <button onClick={refreshNetworkInfo}>🔄</button>
-          <button onClick={disconnectWallet}>Disconnect</button>
-        </div>
-      )}
+      </header>
+
     </div>
   );
 }
