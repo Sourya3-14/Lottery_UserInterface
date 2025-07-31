@@ -84,6 +84,7 @@ function LotteryEntrance() {
 			// Immediately refetch relevant data
 			refetchPlayers()
 			refetchState()
+    //   refetchBalance() // Also refetch balance to show updated ETH
 		},
 	})
 
