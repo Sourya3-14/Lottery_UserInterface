@@ -16,6 +16,77 @@ function Header() {
 	const chains = useChains()
 	const { switchChain } = useSwitchChain()
 
+	// Detect mobile device
+	const isMobile = useMemo(() => {
+		return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+	}, [])
+
+	// Check if wallet is installed
+	const checkWalletInstalled = (connectorName) => {
+		const name = connectorName?.toLowerCase()
+		
+		if (name?.includes("metamask")) {
+			return !!(window.ethereum && window.ethereum.isMetaMask)
+		}
+		if (name?.includes("coinbase")) {
+			return !!(window.ethereum && window.ethereum.isCoinbaseWallet)
+		}
+		if (name?.includes("phantom")) {
+			return !!(window.solana && window.solana.isPhantom)
+		}
+		
+		// For injected wallets, check if any ethereum provider exists
+		if (name?.includes("injected")) {
+			return !!window.ethereum
+		}
+		
+		return false
+	}
+
+	// Get wallet deep links and download URLs
+	const getWalletLinks = (connectorName) => {
+		const name = connectorName?.toLowerCase()
+		const currentUrl = encodeURIComponent(window.location.href)
+		
+		if (name?.includes("metamask")) {
+			return {
+				deepLink: `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`,
+				downloadUrl: isMobile 
+					? (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))
+						? 'https://apps.apple.com/app/metamask/id1438144202'
+						: 'https://play.google.com/store/apps/details?id=io.metamask'
+					: 'https://metamask.io/download/',
+				universalLink: `https://metamask.app.link/dapp/${window.location.host}`
+			}
+		}
+		
+		if (name?.includes("coinbase")) {
+			return {
+				deepLink: `https://go.cb-w.com/dapp?cb_url=${currentUrl}`,
+				downloadUrl: isMobile
+					? (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))
+						? 'https://apps.apple.com/app/coinbase-wallet/id1278383455'
+						: 'https://play.google.com/store/apps/details?id=org.toshi'
+					: 'https://www.coinbase.com/wallet',
+				universalLink: `https://go.cb-w.com/dapp?cb_url=${currentUrl}`
+			}
+		}
+		
+		if (name?.includes("walletconnect")) {
+			return {
+				deepLink: null, // WalletConnect handles this through QR codes
+				downloadUrl: 'https://walletconnect.com/wallets',
+				universalLink: null
+			}
+		}
+		
+		return {
+			deepLink: null,
+			downloadUrl: null,
+			universalLink: null
+		}
+	}
+
 	// Wait for Wagmi to initialize properly
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -95,6 +166,45 @@ function Header() {
 		return "💼"
 	}
 
+	// Enhanced mobile wallet connection handler
+	const handleMobileWalletConnection = async (connector) => {
+		const walletLinks = getWalletLinks(connector.name)
+		const isInstalled = checkWalletInstalled(connector.name)
+		
+		if (isMobile && !isInstalled) {
+			// Try deep link first
+			if (walletLinks.deepLink) {
+				console.log("Attempting deep link:", walletLinks.deepLink)
+				
+				// Try to open the deep link
+				const startTime = Date.now()
+				window.location.href = walletLinks.deepLink
+				
+				// If deep link fails (user doesn't have app), redirect to download
+				setTimeout(() => {
+					const timeSpent = Date.now() - startTime
+					// If less than 2 seconds passed, likely the app wasn't installed
+					if (timeSpent < 2000 && walletLinks.downloadUrl) {
+						console.log("Deep link failed, redirecting to download:", walletLinks.downloadUrl)
+						window.open(walletLinks.downloadUrl, '_blank')
+					}
+				}, 1500)
+				
+				return
+			}
+			
+			// Fallback to download URL
+			if (walletLinks.downloadUrl) {
+				console.log("Opening download URL:", walletLinks.downloadUrl)
+				window.open(walletLinks.downloadUrl, '_blank')
+				return
+			}
+		}
+		
+		// If wallet is installed or not mobile, proceed with normal connection
+		return handleConnect(connector)
+	}
+
 	const handleConnect = async (connector) => {
 		try {
 			setConnectionError(null)
@@ -114,7 +224,7 @@ function Header() {
 				})
 			}
 			
-			// SOLUTION 1: Check if this specific connector is already connected
+			// Check if this specific connector is already connected
 			if (isConnected && connector?.uid === connector?.uid) {
 				console.log("Same connector already connected, disconnecting first...")
 				await handleDisconnect()
@@ -122,7 +232,7 @@ function Header() {
 				await new Promise(resolve => setTimeout(resolve, 1000))
 			}
 			
-			// SOLUTION 2: Always wait for disconnected state before connecting
+			// Always wait for disconnected state before connecting
 			if (status !== 'disconnected') {
 				console.log("Waiting for disconnected state...")
 				await new Promise((resolve) => {
@@ -149,7 +259,7 @@ function Header() {
 			
 			console.log("Attempting to connect with:", freshConnector.name)
 			
-			// SOLUTION 3: Use the connect function with proper error handling
+			// Use the connect function with proper error handling
 			await new Promise((resolve, reject) => {
 				connect(
 					{ connector: freshConnector },
@@ -207,7 +317,7 @@ function Header() {
 			setShowWalletPopup(false)
 			setConnectionError(null)
 			
-			// SOLUTION 4: Ensure complete disconnection
+			// Ensure complete disconnection
 			await new Promise((resolve) => {
 				disconnect(undefined, {
 					onSuccess: () => {
@@ -228,7 +338,7 @@ function Header() {
 				}, 2000)
 			})
 			
-			// SOLUTION 5: Wait for state to propagate completely
+			// Wait for state to propagate completely
 			await new Promise(resolve => setTimeout(resolve, 500))
 			
 		} catch (error) {
@@ -324,6 +434,12 @@ function Header() {
 											</button>
 
 											<h2 className="modal-title">Connect your wallet</h2>
+											
+											{isMobile && (
+												<p className="mobile-note">
+													If you don't have a wallet installed, clicking will redirect you to download.
+												</p>
+											)}
 
 											<div className="wallet-grid">
 												{uniqueConnectors.length > 0 ? (
@@ -332,13 +448,15 @@ function Header() {
 															connector.name === "Injected"
 																? "Browser Wallet"
 																: connector.name
+														
+														const isInstalled = checkWalletInstalled(connector.name)
+														const walletLinks = getWalletLinks(connector.name)
 
 														return (
 															<button
 																key={connector.uid}
-																onClick={() => handleConnect(connector)}
+																onClick={() => handleMobileWalletConnection(connector)}
 																className="wallet-option"
-																// Disable if still disconnecting
 																disabled={isDisconnecting}
 															>
 																<div className="wallet-icon">
@@ -351,6 +469,16 @@ function Header() {
 																	<span className="wallet-name">
 																		{displayName}
 																	</span>
+																	{isMobile && !isInstalled && walletLinks.downloadUrl && (
+																		<span className="wallet-status">
+																			Tap to install
+																		</span>
+																	)}
+																	{isMobile && isInstalled && (
+																		<span className="wallet-status installed">
+																			Installed
+																		</span>
+																	)}
 																</div>
 															</button>
 														)
