@@ -43,31 +43,48 @@ function Header() {
 		return false
 	}
 
+	// Detect device type
+	const isIOS = useMemo(() => {
+		return /iPad|iPhone|iPod/.test(navigator.userAgent)
+	}, [])
+
+	const isAndroid = useMemo(() => {
+		return /Android/.test(navigator.userAgent)
+	}, [])
+
 	// Get wallet deep links and download URLs
 	const getWalletLinks = (connectorName) => {
 		const name = connectorName?.toLowerCase()
 		const currentUrl = encodeURIComponent(window.location.href)
 		
 		if (name?.includes("metamask")) {
+			let downloadUrl = 'https://metamask.io/download/' // Desktop default
+			
+			if (isIOS) {
+				downloadUrl = 'https://apps.apple.com/app/metamask/id1438144202'
+			} else if (isAndroid) {
+				downloadUrl = 'https://play.google.com/store/apps/details?id=io.metamask'
+			}
+			
 			return {
 				deepLink: `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`,
-				downloadUrl: isMobile 
-					? (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))
-						? 'https://apps.apple.com/app/metamask/id1438144202'
-						: 'https://play.google.com/store/apps/details?id=io.metamask'
-					: 'https://metamask.io/download/',
+				downloadUrl,
 				universalLink: `https://metamask.app.link/dapp/${window.location.host}`
 			}
 		}
 		
 		if (name?.includes("coinbase")) {
+			let downloadUrl = 'https://www.coinbase.com/wallet' // Desktop default
+			
+			if (isIOS) {
+				downloadUrl = 'https://apps.apple.com/app/coinbase-wallet/id1278383455'
+			} else if (isAndroid) {
+				downloadUrl = 'https://play.google.com/store/apps/details?id=org.toshi'
+			}
+			
 			return {
 				deepLink: `https://go.cb-w.com/dapp?cb_url=${currentUrl}`,
-				downloadUrl: isMobile
-					? (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))
-						? 'https://apps.apple.com/app/coinbase-wallet/id1278383455'
-						: 'https://play.google.com/store/apps/details?id=org.toshi'
-					: 'https://www.coinbase.com/wallet',
+				downloadUrl,
 				universalLink: `https://go.cb-w.com/dapp?cb_url=${currentUrl}`
 			}
 		}
