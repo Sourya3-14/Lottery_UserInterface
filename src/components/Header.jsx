@@ -6,44 +6,66 @@ function Header() {
 	const [showWalletPopup, setShowWalletPopup] = useState(false)
 	const [connectionError, setConnectionError] = useState(null)
 	const [isDisconnecting, setIsDisconnecting] = useState(false)
+	const [isInitialized, setIsInitialized] = useState(false)
 
 	// Wagmi hooks
-	const { address, isConnected, connector } = useAccount()
+	const { address, isConnected, connector, status } = useAccount()
 	const { connect, connectors, isPending, error } = useConnect()
 	const { disconnect } = useDisconnect()
 	const chainId = useChainId()
 	const chains = useChains()
 	const { switchChain } = useSwitchChain()
 
-	// Force close popup when disconnected
+	// Wait for Wagmi to initialize properly
 	useEffect(() => {
-		if (!isConnected) {
-			setShowWalletPopup(false)
-		}
-	}, [isConnected])
+		const timer = setTimeout(() => {
+			setIsInitialized(true)
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [])
 
-	// Deduplicate connectors to avoid showing MetaMask twice
+	useEffect(() => {
+		if (connectors && connectors.length > 0) {
+			setIsInitialized(true)
+		}
+	}, [connectors])
+
+	// Force close popups when disconnected and clear disconnecting state
+	useEffect(() => {
+		if (!isConnected || status === 'disconnected') {
+			setShowWalletPopup(false)
+			setShowWalletOptions(false)
+			setIsDisconnecting(false)
+			setConnectionError(null)
+		}
+	}, [isConnected, status])
+
+	// Clear connection error when successfully connected
+	useEffect(() => {
+		if (isConnected && status === 'connected') {
+			setConnectionError(null)
+			setShowWalletOptions(false)
+			setIsDisconnecting(false)
+		}
+	}, [isConnected, status])
+
+	// Deduplicate connectors
 	const uniqueConnectors = useMemo(() => {
 		const seen = new Set()
 		return connectors.filter((connector) => {
-			// Create a unique key based on connector type and provider
 			const key = connector.name?.toLowerCase() || connector.id
 
-			// Skip if we've already seen this connector type
 			if (seen.has(key)) {
 				return false
 			}
 
-			// For injected connectors, check if they're actually available
 			if (connector.type === "injected") {
-				// Skip if MetaMask or Coinbase specific connectors are already available
 				if (connectors.some((c) => c.name === "MetaMask" && c !== connector)) {
 					return false
 				}
 				if (connectors.some((c) => c.name === "Coinbase Wallet" && c !== connector)) {
 					return false
 				}
-				// Only show if there's actually an ethereum provider
 				if (!window?.ethereum) {
 					return false
 				}
@@ -54,16 +76,13 @@ function Header() {
 		})
 	}, [connectors])
 
-	// Get current chain info
 	const currentChain = chains.find((chain) => chain.id === chainId)
 
-	// Format address for display
 	const formatAddress = (addr) => {
 		if (!addr) return ""
 		return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 	}
 
-	// Get connector icon
 	const getConnectorIcon = (connectorName, connectorId) => {
 		const name = connectorName?.toLowerCase()
 		const id = connectorId?.toLowerCase()
@@ -76,50 +95,155 @@ function Header() {
 		return "💼"
 	}
 
-	const handleConnect = (connector) => {
-		setConnectionError(null) // Clear any previous errors
-		connect(
-			{ connector },
-			{
-				onError: (error) => {
-					console.error("Connection error:", error)
-					setShowWalletOptions(false) // Close the modal
-					setConnectionError(error) // Set the error to show
-
-					// Auto-clear error after 5 seconds
-					setTimeout(() => {
-						setConnectionError(null)
-					}, 5000)
-				},
-				onSuccess: () => {
-					setShowWalletOptions(false)
-					setConnectionError(null)
-				},
-			},
-		)
+	const handleConnect = async (connector) => {
+		try {
+			setConnectionError(null)
+			
+			// Wait for initialization if not ready
+			if (!isInitialized) {
+				console.log("Waiting for Wagmi initialization...")
+				await new Promise(resolve => {
+					const checkInit = () => {
+						if (isInitialized || (connectors && connectors.length > 0)) {
+							resolve()
+						} else {
+							setTimeout(checkInit, 100)
+						}
+					}
+					checkInit()
+				})
+			}
+			
+			// SOLUTION 1: Check if this specific connector is already connected
+			if (isConnected && connector?.uid === connector?.uid) {
+				console.log("Same connector already connected, disconnecting first...")
+				await handleDisconnect()
+				// Wait longer for state to clear
+				await new Promise(resolve => setTimeout(resolve, 1000))
+			}
+			
+			// SOLUTION 2: Always wait for disconnected state before connecting
+			if (status !== 'disconnected') {
+				console.log("Waiting for disconnected state...")
+				await new Promise((resolve) => {
+					const checkDisconnected = () => {
+						if (status === 'disconnected' && !isConnected) {
+							resolve()
+						} else {
+							setTimeout(checkDisconnected, 100)
+						}
+					}
+					checkDisconnected()
+				})
+			}
+			
+			// Find fresh connector instance
+			const freshConnector = connectors.find(c => 
+				c.name === connector.name && 
+				c.type === connector.type
+			)
+			
+			if (!freshConnector) {
+				throw new Error("Connector no longer available")
+			}
+			
+			console.log("Attempting to connect with:", freshConnector.name)
+			
+			// SOLUTION 3: Use the connect function with proper error handling
+			await new Promise((resolve, reject) => {
+				connect(
+					{ connector: freshConnector },
+					{
+						onError: (error) => {
+							console.error("Connection error:", error)
+							
+							// Handle specific "already connected" error
+							if (error.message?.includes('already connected') || 
+								error.message?.includes('Connector already connected')) {
+								console.log("Handling 'already connected' error, forcing disconnect...")
+								
+								// Force disconnect and retry
+								disconnect(undefined, {
+									onSuccess: () => {
+										setTimeout(() => {
+											// Retry connection after disconnect
+											connect({ connector: freshConnector })
+										}, 1000)
+									}
+								})
+								return
+							}
+							
+							setShowWalletOptions(false)
+							setConnectionError(error)
+							
+							setTimeout(() => {
+								setConnectionError(null)
+							}, 5000)
+							
+							reject(error)
+						},
+						onSuccess: () => {
+							console.log("Connection successful")
+							setShowWalletOptions(false)
+							setConnectionError(null)
+							setIsDisconnecting(false)
+							resolve()
+						},
+					}
+				)
+			})
+			
+		} catch (error) {
+			console.error("Connect handler error:", error)
+			setConnectionError(error)
+			setShowWalletOptions(false)
+		}
 	}
 
 	const handleDisconnect = async () => {
 		try {
 			setIsDisconnecting(true)
 			setShowWalletPopup(false)
+			setConnectionError(null)
 			
-			// Call disconnect
-			await disconnect()
+			// SOLUTION 4: Ensure complete disconnection
+			await new Promise((resolve) => {
+				disconnect(undefined, {
+					onSuccess: () => {
+						console.log("Disconnect successful")
+						resolve()
+					},
+					onError: (error) => {
+						console.error("Disconnect error:", error)
+						// Still resolve to continue
+						resolve()
+					}
+				})
+				
+				// Fallback timeout
+				setTimeout(() => {
+					console.log("Disconnect timeout fallback")
+					resolve()
+				}, 2000)
+			})
 			
-			// Optional: Add a small delay to ensure state propagation
-			setTimeout(() => {
-				setIsDisconnecting(false)
-			}, 200)
+			// SOLUTION 5: Wait for state to propagate completely
+			await new Promise(resolve => setTimeout(resolve, 500))
 			
 		} catch (error) {
-			console.error("Disconnect error:", error)
-			setIsDisconnecting(false)
+			console.error("Disconnect handler error:", error)
+		} finally {
+			setTimeout(() => {
+				setIsDisconnecting(false)
+			}, 500)
 		}
 	}
 
+	const actuallyConnected = isConnected && status === 'connected' && address && !isDisconnecting
+
 	// Show disconnecting state
-	if (isDisconnecting) {
+	if (isDisconnecting && !actuallyConnected) {
 		return (
 			<div>
 				<header className="app-header">
@@ -142,18 +266,14 @@ function Header() {
 
 	return (
 		<div>
-			{/* Header */}
 			<header className="app-header">
 				<div className="header-container">
-					{/* Left side - App branding */}
 					<div className="header-left">
 						<div className="app-title">DeFi Lottery</div>
 						<span className="app-subtitle">Secure and Transparent Lottery System</span>
 					</div>
 
-					{/* Right side - Wallet connection */}
 					<div className="wallet-connection">
-						{/* Error Toast */}
 						{connectionError && (
 							<div className="error-toast">
 								<div className="error-toast-content">
@@ -163,7 +283,9 @@ function Header() {
 											? "Connection cancelled by user"
 											: connectionError.code === -32002
 												? "Connection request already pending"
-												: `Connection failed: ${connectionError.message}`}
+												: connectionError.message?.includes('already connected')
+													? "Please try again in a moment"
+													: `Connection failed: ${connectionError.message}`}
 									</span>
 									<button
 										onClick={() => setConnectionError(null)}
@@ -175,7 +297,7 @@ function Header() {
 							</div>
 						)}
 
-						{!isConnected ? (
+						{!actuallyConnected ? (
 							<div>
 								{isPending ? (
 									<div className="connecting-status">
@@ -191,8 +313,7 @@ function Header() {
 									</button>
 								)}
 
-								{/* Wallet Selection Modal */}
-								{showWalletOptions && !isPending && (
+								{showWalletOptions && !isPending && isInitialized && (
 									<div className="modal-overlay">
 										<div className="modal-content">
 											<button
@@ -205,32 +326,44 @@ function Header() {
 											<h2 className="modal-title">Connect your wallet</h2>
 
 											<div className="wallet-grid">
-												{uniqueConnectors.map((connector) => {
-													const displayName =
-														connector.name === "Injected"
-															? "Browser Wallet"
-															: connector.name
+												{uniqueConnectors.length > 0 ? (
+													uniqueConnectors.map((connector) => {
+														const displayName =
+															connector.name === "Injected"
+																? "Browser Wallet"
+																: connector.name
 
-													return (
-														<button
-															key={connector.uid}
-															onClick={() => handleConnect(connector)}
-															className="wallet-option"
-														>
-															<div className="wallet-icon">
-																{getConnectorIcon(
-																	connector.name,
-																	connector.id,
-																)}
-															</div>
-															<div className="wallet-info">
-																<span className="wallet-name">
-																	{displayName}
-																</span>
-															</div>
-														</button>
-													)
-												})}
+														return (
+															<button
+																key={connector.uid}
+																onClick={() => handleConnect(connector)}
+																className="wallet-option"
+																// Disable if still disconnecting
+																disabled={isDisconnecting}
+															>
+																<div className="wallet-icon">
+																	{getConnectorIcon(
+																		connector.name,
+																		connector.id,
+																	)}
+																</div>
+																<div className="wallet-info">
+																	<span className="wallet-name">
+																		{displayName}
+																	</span>
+																</div>
+															</button>
+														)
+													})
+												) : (
+													<div style={{ 
+														padding: '20px', 
+														textAlign: 'center', 
+														color: '#94a3b8' 
+													}}>
+														Loading wallets...
+													</div>
+												)}
 											</div>
 										</div>
 									</div>
@@ -247,7 +380,6 @@ function Header() {
 									<span className="wallet-address">{formatAddress(address)}</span>
 								</div>
 
-								{/* Wallet Info Popup */}
 								{showWalletPopup && (
 									<div
 										className="wallet-popup"
